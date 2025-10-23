@@ -33,3 +33,23 @@ forge script script/DeployOracleSuite.s.sol:DeployOracleSuite \
 
 - Tweak `TEE_ARCH_LABEL`, `TEE_ARCH`, or other flags directly in `.env` (e.g. set `DEPLOY_DSTACK_VERIFIER=false`).
 - Replace `DEPLOYER_PRIVATE_KEY` with a funded key before targeting a shared fork or live network.
+
+## 3. Manually Register a Resolver Key (Dev Only)
+
+While you iterate without a real TEE, authorize a resolver by calling the registry owner helper:
+
+```bash
+cast send $TEE_REGISTRY_ADDRESS \
+  'forceAddKey(uint256,bytes32,bytes32,address,string)' \
+  $AGENT_ID \
+  $TEE_ARCH_HASH \
+  0x0000000000000000000000000000000000000000000000000000000000000000 \
+  $RESOLVER_ADDRESS \
+  manual://dev \
+  --rpc-url http://127.0.0.1:8545 \
+  --private-key "$DEPLOYER_PRIVATE_KEY"
+```
+
+- Use the agent ID returned by `IdentityRegistry.register()` and the resolver wallet that will call `settlePrice`.
+- `TEE_ARCH_HASH` can reuse the hash logged during deployment (e.g. `0xf966…b98f`).
+- Remove a manual resolver with `cast send $TEE_REGISTRY_ADDRESS 'forceRemoveKey(address)' $RESOLVER_ADDRESS ...`.

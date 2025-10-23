@@ -26,17 +26,14 @@ interface ITEERegistry {
         address verifier
     );
 
-    event KeyRemoved(
-        uint256 indexed agentId,
-        address pubkey
-    );
+    event KeyRemoved(uint256 indexed agentId, address pubkey);
 
     function verifiers(address verifier) external view returns (Verifier memory);
     function keys(uint256 agentId, address pubkey) external view returns (Key memory);
 
     function addVerifier(address verifier, bytes32 vendor) external;
     function removeVerifier(address verifier) external;
-    
+
     function addKey(
         uint256 agentId,
         bytes32 teeArch,
@@ -46,12 +43,19 @@ interface ITEERegistry {
         address verifier,
         bytes calldata proof
     ) external;
-    
-    function removeKey(
+
+    function removeKey(uint256 agentId, address pubkey) external;
+
+    function forceAddKey(
         uint256 agentId,
-        address pubkey
+        bytes32 teeArch,
+        bytes32 codeMeasurement,
+        address pubkey,
+        string calldata codeConfigUri
     ) external;
-    
+
+    function forceRemoveKey(address pubkey) external;
+
     function getKey(uint256 agentId, address pubkey) external view returns (Key memory);
     function hasKey(uint256 agentId, address pubkey) external view returns (bool);
     function getKeyCount(uint256 agentId) external view returns (uint256);

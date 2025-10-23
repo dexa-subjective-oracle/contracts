@@ -16,6 +16,7 @@ contract TEERegistry is ITEERegistry, Ownable {
     using EnumerableSet for EnumerableSet.AddressSet;
 
     address public identityRegistry;
+    address public constant MANUAL_VERIFIER = address(0xdead);
 
     mapping(address => Verifier) private _verifiers;
     mapping(uint256 => EnumerableSet.AddressSet) private _agentKeys;
@@ -67,28 +68,13 @@ contract TEERegistry is ITEERegistry, Ownable {
             "Not authorized"
         );
 
-        // TODO: Verify that verifier is whitelisted
         require(_verifiers[verifier].teeArch != bytes32(0), "Verifier not whitelisted");
-
-        // Verify key doesn't already exist
-        require(_keys[pubkey].verifier == address(0), "Key already exists");
 
         bool valid =
             ITEEVerifier(verifier).verify(identityRegistry, agentId, codeMeasurement, pubkey, codeConfigUri, proof);
         require(valid, "Invalid proof");
 
-        _keys[pubkey] = Key({
-            teeArch: teeArch,
-            codeMeasurement: codeMeasurement,
-            pubkey: abi.encodePacked(pubkey),
-            codeConfigUri: codeConfigUri,
-            verifier: verifier
-        });
-        _keyAgents[pubkey] = agentId;
-
-        _agentKeys[agentId].add(pubkey);
-
-        emit KeyAdded(agentId, teeArch, codeMeasurement, pubkey, codeConfigUri, verifier);
+        _storeKey(agentId, teeArch, codeMeasurement, pubkey, codeConfigUri, verifier);
     }
 
     function removeKey(uint256 agentId, address pubkey) external {
@@ -99,13 +85,25 @@ contract TEERegistry is ITEERegistry, Ownable {
             "Not authorized"
         );
 
-        require(_agentKeys[agentId].contains(pubkey), "Key not found");
+        _removeKey(agentId, pubkey);
+    }
 
-        _agentKeys[agentId].remove(pubkey);
-        delete _keys[pubkey];
-        delete _keyAgents[pubkey];
+    function forceAddKey(
+        uint256 agentId,
+        bytes32 teeArch,
+        bytes32 codeMeasurement,
+        address pubkey,
+        string calldata codeConfigUri
+    ) external onlyOwner {
+        require(pubkey != address(0), "Invalid pubkey");
+        _storeKey(agentId, teeArch, codeMeasurement, pubkey, codeConfigUri, MANUAL_VERIFIER);
+    }
 
-        emit KeyRemoved(agentId, pubkey);
+    function forceRemoveKey(address pubkey) external onlyOwner {
+        Key memory existing = _keys[pubkey];
+        require(existing.verifier != address(0), "Key not found");
+        uint256 agentId = _keyAgents[pubkey];
+        _removeKey(agentId, pubkey);
     }
 
     function getKey(uint256 agentId, address pubkey) external view returns (Key memory) {
@@ -139,5 +137,38 @@ contract TEERegistry is ITEERegistry, Ownable {
 
     function keyAgent(address pubkey) external view returns (uint256) {
         return _keyAgents[pubkey];
+    }
+
+    function _storeKey(
+        uint256 agentId,
+        bytes32 teeArch,
+        bytes32 codeMeasurement,
+        address pubkey,
+        string memory codeConfigUri,
+        address verifier
+    ) internal {
+        require(_keys[pubkey].verifier == address(0), "Key already exists");
+
+        _keys[pubkey] = Key({
+            teeArch: teeArch,
+            codeMeasurement: codeMeasurement,
+            pubkey: abi.encodePacked(pubkey),
+            codeConfigUri: codeConfigUri,
+            verifier: verifier
+        });
+        _keyAgents[pubkey] = agentId;
+        _agentKeys[agentId].add(pubkey);
+
+        emit KeyAdded(agentId, teeArch, codeMeasurement, pubkey, codeConfigUri, verifier);
+    }
+
+    function _removeKey(uint256 agentId, address pubkey) internal {
+        require(_agentKeys[agentId].contains(pubkey), "Key not found");
+
+        _agentKeys[agentId].remove(pubkey);
+        delete _keys[pubkey];
+        delete _keyAgents[pubkey];
+
+        emit KeyRemoved(agentId, pubkey);
     }
 }
