@@ -3,11 +3,9 @@ pragma solidity ^0.8.0;
 
 import "@openzeppelin/contracts/utils/cryptography/ECDSA.sol";
 import "../interfaces/IAutomataDcapAttestation.sol";
+import "../interfaces/ITEEVerifier.sol";
 
-import "forge-std/console.sol";
-
-contract DstackOffchainVerifier {
-
+contract DstackOffchainVerifier is ITEEVerifier {
     address public validatorPublicKey;
     address public dcapVerifier;
 
@@ -40,15 +38,13 @@ contract DstackOffchainVerifier {
 
     function initValidator(address _validatorPublicKey, bytes calldata rawQuote) external {
         // Verify DCAP attestation first
-        // TODO: Uncomment this when the DCAP attestation is implemented
-        (bool success, bytes memory output) = IAutomataDcapAttestation(dcapVerifier).verifyAndAttestOnChain(rawQuote);
+        (bool success,) = IAutomataDcapAttestation(dcapVerifier).verifyAndAttestOnChain(rawQuote);
         require(success, "DCAP verification failed");
 
         // Extract and verify public key
-        bytes memory reportData = substring(rawQuote, 520+48, 64);        
+        bytes memory reportData = substring(rawQuote, 520 + 48, 64);
 
         address publicKey = address(uint160(uint256(bytes32(reportData)) >> 96));
-        console.logAddress(publicKey);
         require(publicKey == _validatorPublicKey, "Invalid public key");
 
         // Verify measurements
@@ -57,46 +53,33 @@ contract DstackOffchainVerifier {
     }
 
     function _verifyMeasurements(bytes memory reportBytes) internal view {
-
-        // console.log all the values
-        {
-            console.logBytes(substring(reportBytes, 136+48, 48));
-            console.logBytes(substring(reportBytes, 184+48, 48));
-            console.logBytes(substring(reportBytes, 328+48, 48));
-            console.logBytes(substring(reportBytes, 376+48, 48));
-            console.logBytes(substring(reportBytes, 424+48, 48));
-            console.logBytes(substring(reportBytes, 472+48, 48));
-        }
-
-        require(keccak256(substring(reportBytes, 136+48, 48)) == keccak256(referenceMrTd), "Invalid mrTd");
-        require(keccak256(substring(reportBytes, 184+48, 48)) == keccak256(referenceMrConfigId), "Invalid mrConfigId");
-        require(keccak256(substring(reportBytes, 328+48, 48)) == keccak256(referenceRtMr0), "Invalid rtMr0");
-        require(keccak256(substring(reportBytes, 376+48, 48)) == keccak256(referenceRtMr1), "Invalid rtMr1");
-        require(keccak256(substring(reportBytes, 424+48, 48)) == keccak256(referenceRtMr2), "Invalid rtMr2");
-        require(keccak256(substring(reportBytes, 472+48, 48)) == keccak256(referenceRtMr3), "Invalid rtMr3");
+        require(keccak256(substring(reportBytes, 136 + 48, 48)) == keccak256(referenceMrTd), "Invalid mrTd");
+        require(keccak256(substring(reportBytes, 184 + 48, 48)) == keccak256(referenceMrConfigId), "Invalid mrConfigId");
+        require(keccak256(substring(reportBytes, 328 + 48, 48)) == keccak256(referenceRtMr0), "Invalid rtMr0");
+        require(keccak256(substring(reportBytes, 376 + 48, 48)) == keccak256(referenceRtMr1), "Invalid rtMr1");
+        require(keccak256(substring(reportBytes, 424 + 48, 48)) == keccak256(referenceRtMr2), "Invalid rtMr2");
+        require(keccak256(substring(reportBytes, 472 + 48, 48)) == keccak256(referenceRtMr3), "Invalid rtMr3");
     }
 
     // Verify the offchain compressed proof
-    //
-    // The real validation happened offchain by the validator. Validator acts as an oracle to
-    // provide the proof for onchain verification
     function verify(
+        address,
+        uint256,
         bytes32 codeMeasurement,
         address pubkey,
         string calldata codeConfigUri,
         bytes calldata proof
-    ) external view returns (bool) {
+    ) external view override returns (bool) {
         // Verify the signature from the validator
-        (bytes32 message, bytes memory signature) = abi.decode(proof, (bytes32, bytes));
-        require(ECDSA.recover(message, signature) == validatorPublicKey, "Invalid signature");
+        (bytes memory message, bytes memory signature) = abi.decode(proof, (bytes, bytes));
+        bytes32 digest = keccak256(message);
+        require(ECDSA.recover(digest, signature) == validatorPublicKey, "Invalid signature");
 
         // Verify the claims
-        (bytes32 expectedMeasurement, address expectedPubkey, string memory expectedCodeConfigUri) = abi.decode(abi.encodePacked(message), (bytes32, address, string));
-        return (
-            expectedMeasurement == codeMeasurement
-            && expectedPubkey == pubkey
-            && keccak256(bytes(expectedCodeConfigUri)) == keccak256(bytes(codeConfigUri))
-        );
+        (bytes32 expectedMeasurement, address expectedPubkey, string memory expectedCodeConfigUri) =
+            abi.decode(message, (bytes32, address, string));
+        return (expectedMeasurement == codeMeasurement && expectedPubkey == pubkey
+                && keccak256(bytes(expectedCodeConfigUri)) == keccak256(bytes(codeConfigUri)));
     }
 
     function substring(bytes memory data, uint256 start, uint256 length) internal pure returns (bytes memory) {
@@ -106,5 +89,4 @@ contract DstackOffchainVerifier {
         }
         return result;
     }
-
 }

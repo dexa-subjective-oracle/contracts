@@ -2,6 +2,7 @@
 pragma solidity ^0.8.0;
 
 import "../interfaces/ITEERegistry.sol";
+import "../interfaces/ITEEVerifier.sol";
 import "@openzeppelin/contracts/access/Ownable.sol";
 import "@openzeppelin/contracts/utils/structs/EnumerableSet.sol";
 
@@ -9,15 +10,6 @@ interface IIdentityRegistryLike {
     function ownerOf(uint256 tokenId) external view returns (address);
     function isApprovedForAll(address owner, address operator) external view returns (bool);
     function getApproved(uint256 tokenId) external view returns (address);
-}
-
-interface ITEEProofVerifier {
-    function verify(
-        bytes32 codeMeasurement,
-        address pubkey,
-        string calldata codeConfigUri,
-        bytes calldata proof
-    ) external view returns (bool);
 }
 
 contract TEERegistry is ITEERegistry, Ownable {
@@ -45,9 +37,7 @@ contract TEERegistry is ITEERegistry, Ownable {
     function addVerifier(address verifier, bytes32 teeArch) external onlyOwner {
         require(verifier != address(0), "Invalid verifier address");
 
-        _verifiers[verifier] = Verifier({
-            teeArch: teeArch
-        });
+        _verifiers[verifier] = Verifier({teeArch: teeArch});
 
         emit VerifierAdded(verifier, teeArch);
     }
@@ -72,9 +62,8 @@ contract TEERegistry is ITEERegistry, Ownable {
         require(pubkey != address(0), "Invalid pubkey");
         address owner = IIdentityRegistryLike(identityRegistry).ownerOf(agentId);
         require(
-            msg.sender == owner ||
-                IIdentityRegistryLike(identityRegistry).isApprovedForAll(owner, msg.sender) ||
-                IIdentityRegistryLike(identityRegistry).getApproved(agentId) == msg.sender,
+            msg.sender == owner || IIdentityRegistryLike(identityRegistry).isApprovedForAll(owner, msg.sender)
+                || IIdentityRegistryLike(identityRegistry).getApproved(agentId) == msg.sender,
             "Not authorized"
         );
 
@@ -84,7 +73,8 @@ contract TEERegistry is ITEERegistry, Ownable {
         // Verify key doesn't already exist
         require(_keys[pubkey].verifier == address(0), "Key already exists");
 
-        bool valid = ITEEProofVerifier(verifier).verify(codeMeasurement, pubkey, codeConfigUri, proof);
+        bool valid =
+            ITEEVerifier(verifier).verify(identityRegistry, agentId, codeMeasurement, pubkey, codeConfigUri, proof);
         require(valid, "Invalid proof");
 
         _keys[pubkey] = Key({
@@ -101,15 +91,11 @@ contract TEERegistry is ITEERegistry, Ownable {
         emit KeyAdded(agentId, teeArch, codeMeasurement, pubkey, codeConfigUri, verifier);
     }
 
-    function removeKey(
-        uint256 agentId,
-        address pubkey
-    ) external {
+    function removeKey(uint256 agentId, address pubkey) external {
         address owner = IIdentityRegistryLike(identityRegistry).ownerOf(agentId);
         require(
-            msg.sender == owner ||
-                IIdentityRegistryLike(identityRegistry).isApprovedForAll(owner, msg.sender) ||
-                IIdentityRegistryLike(identityRegistry).getApproved(agentId) == msg.sender,
+            msg.sender == owner || IIdentityRegistryLike(identityRegistry).isApprovedForAll(owner, msg.sender)
+                || IIdentityRegistryLike(identityRegistry).getApproved(agentId) == msg.sender,
             "Not authorized"
         );
 
