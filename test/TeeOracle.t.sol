@@ -74,6 +74,10 @@ contract TeeOracleTest is Test {
         assertFalse(settled, "should not be settled");
         assertEq(settledPrice, 0, "price default");
         assertEq(storedHash, bytes32(0), "hash default");
+
+        bytes32[] memory pending = oracle.pendingRequests();
+        assertEq(pending.length, 1, "pending length");
+        assertEq(pending[0], requestId, "pending id");
     }
 
     function testHasPriceFalseBeforeSettlement() public {
@@ -111,6 +115,9 @@ contract TeeOracleTest is Test {
         assertEq(settledPrice, 1e18, "price");
         assertEq(storedHash, bytes32("hash"), "hash stored");
         assertTrue(oracle.hasPrice(address(this), IDENTIFIER, timestamp, ANCILLARY_DATA), "has price true");
+
+        bytes32[] memory pendingAfter = oracle.pendingRequests();
+        assertEq(pendingAfter.length, 0, "pending cleared");
     }
 
     function testSettleAndGetPriceRevertsWhenUnset() public {
