@@ -23,20 +23,20 @@ contract IdentityRegistry is ERC721URIStorage, Ownable {
 
     function register() external returns (uint256 agentId) {
         agentId = _lastId++;
-        _safeMint(msg.sender, agentId);
+        _mint(msg.sender, agentId);
         emit Registered(agentId, "", msg.sender);
     }
 
     function register(string memory tokenUri) external returns (uint256 agentId) {
         agentId = _lastId++;
-        _safeMint(msg.sender, agentId);
+        _mint(msg.sender, agentId);
         _setTokenURI(agentId, tokenUri);
         emit Registered(agentId, tokenUri, msg.sender);
     }
 
     function register(string memory tokenUri, MetadataEntry[] memory metadata) external returns (uint256 agentId) {
         agentId = _lastId++;
-        _safeMint(msg.sender, agentId);
+        _mint(msg.sender, agentId);
         _setTokenURI(agentId, tokenUri);
         emit Registered(agentId, tokenUri, msg.sender);
 
