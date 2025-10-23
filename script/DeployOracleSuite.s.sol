@@ -16,7 +16,7 @@ import {TeeOracleAdapter} from "../src/TeeOracleAdapter.sol";
 ///  - TEE_ARCH: optional raw bytes32; defaults to keccak256(TEE_ARCH_LABEL)
 ///  - TEE_ARCH_LABEL: optional string label (default: "INTEL_TDX")
 ///  - DEPLOY_DSTACK_VERIFIER: toggle off-chain verifier deployment (default: true)
-///  - DEPLOY_ORACLE_ADAPTER: deploy TeeOracleAdapter for ancillary workflows (default: false)
+///  - DEPLOY_ORACLE_ADAPTER: deploy TeeOracleAdapter for ancillary workflows (default: true)
 contract DeployOracleSuite is Script {
     struct Deployment {
         address identityRegistry;
@@ -29,7 +29,7 @@ contract DeployOracleSuite is Script {
 
     function run() external returns (Deployment memory deployment) {
         bool deployDstackVerifier = vm.envOr("DEPLOY_DSTACK_VERIFIER", true);
-        bool deployOracleAdapter = vm.envOr("DEPLOY_ORACLE_ADAPTER", false);
+        bool deployOracleAdapter = vm.envOr("DEPLOY_ORACLE_ADAPTER", true);
 
         bytes32 teeArch = vm.envOr("TEE_ARCH", bytes32(0));
         string memory teeArchLabel = "INTEL_TDX";
