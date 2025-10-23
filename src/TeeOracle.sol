@@ -14,6 +14,8 @@ contract TeeOracle {
         address rewardToken;
         uint256 reward;
         uint256 timestamp;
+        bytes32 identifier;
+        bytes ancillaryData;
         bool settled;
         int256 settledPrice;
         bytes32 evidenceHash;
@@ -47,6 +49,8 @@ contract TeeOracle {
         req.rewardToken = rewardToken;
         req.reward = reward;
         req.timestamp = timestamp;
+        req.identifier = identifier;
+        req.ancillaryData = ancillaryData;
         _addPendingRequest(requestId);
         emit PriceRequested(requestId, msg.sender, ancillaryData);
     }
@@ -104,6 +108,14 @@ contract TeeOracle {
 
     function pendingRequests() external view returns (bytes32[] memory) {
         return _pendingRequests;
+    }
+
+    function getRequest(bytes32 requestId) external view returns (Request memory) {
+        Request storage req = requests[requestId];
+        if (req.requester == address(0)) {
+            revert RequestNotFound();
+        }
+        return req;
     }
 
     function _addPendingRequest(bytes32 requestId) internal {

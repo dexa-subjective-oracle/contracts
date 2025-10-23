@@ -57,23 +57,16 @@ contract TeeOracleTest is Test {
 
         bytes32 requestId = oracle.requestPrice(IDENTIFIER, timestamp, ANCILLARY_DATA, address(0), 0);
 
-        (
-            address requester,
-            address rewardToken,
-            uint256 reward,
-            uint256 storedTimestamp,
-            bool settled,
-            int256 settledPrice,
-            bytes32 storedHash
-        ) = oracle.requests(requestId);
-
-        assertEq(requester, address(this), "requester");
-        assertEq(rewardToken, address(0), "reward token");
-        assertEq(reward, 0, "reward");
-        assertEq(storedTimestamp, timestamp, "timestamp");
-        assertFalse(settled, "should not be settled");
-        assertEq(settledPrice, 0, "price default");
-        assertEq(storedHash, bytes32(0), "hash default");
+        TeeOracle.Request memory req = oracle.getRequest(requestId);
+        assertEq(req.requester, address(this), "requester");
+        assertEq(req.rewardToken, address(0), "reward token");
+        assertEq(req.reward, 0, "reward");
+        assertEq(req.timestamp, timestamp, "timestamp");
+        assertEq(req.identifier, IDENTIFIER, "identifier");
+        assertEq(keccak256(req.ancillaryData), keccak256(ANCILLARY_DATA), "ancillary");
+        assertFalse(req.settled, "should not be settled");
+        assertEq(req.settledPrice, 0, "price default");
+        assertEq(req.evidenceHash, bytes32(0), "hash default");
 
         bytes32[] memory pending = oracle.pendingRequests();
         assertEq(pending.length, 1, "pending length");
@@ -109,11 +102,11 @@ contract TeeOracleTest is Test {
         vm.prank(AGENT);
         oracle.settlePrice(IDENTIFIER, timestamp, ANCILLARY_DATA, 1e18, bytes32("hash"));
 
-        (,,,, bool settled, int256 settledPrice, bytes32 storedHash) = oracle.requests(requestId);
+        TeeOracle.Request memory req = oracle.getRequest(requestId);
 
-        assertTrue(settled, "should be settled");
-        assertEq(settledPrice, 1e18, "price");
-        assertEq(storedHash, bytes32("hash"), "hash stored");
+        assertTrue(req.settled, "should be settled");
+        assertEq(req.settledPrice, 1e18, "price");
+        assertEq(req.evidenceHash, bytes32("hash"), "hash stored");
         assertTrue(oracle.hasPrice(address(this), IDENTIFIER, timestamp, ANCILLARY_DATA), "has price true");
 
         bytes32[] memory pendingAfter = oracle.pendingRequests();
