@@ -2,6 +2,7 @@
 pragma solidity ^0.8.20;
 
 import "forge-std/Test.sol";
+import "@openzeppelin/contracts/access/Ownable.sol";
 import "../src/TeeOracle.sol";
 import "../src/TeeOracleAdapter.sol";
 import "../src/registry/IdentityRegistry.sol";
@@ -14,12 +15,7 @@ contract MockProofVerifier {
         shouldVerify = value;
     }
 
-    function verify(
-        bytes32,
-        address,
-        string calldata,
-        bytes calldata
-    ) external view returns (bool) {
+    function verify(address, uint256, bytes32, address, string calldata, bytes calldata) external view returns (bool) {
         return shouldVerify;
     }
 }
@@ -49,13 +45,7 @@ contract TeeOracleTest is Test {
 
         vm.prank(AGENT);
         teeRegistry.addKey(
-            agentId,
-            bytes32("TDX"),
-            keccak256("code"),
-            AGENT,
-            "ipfs://config",
-            address(mockVerifier),
-            bytes("")
+            agentId, bytes32("TDX"), keccak256("code"), AGENT, "ipfs://config", address(mockVerifier), bytes("")
         );
 
         oracle = new TeeOracle(address(teeRegistry));
@@ -65,8 +55,7 @@ contract TeeOracleTest is Test {
     function testRequestPriceStoresRequest() public {
         uint256 timestamp = block.timestamp;
 
-        bytes32 requestId =
-            oracle.requestPrice(IDENTIFIER, timestamp, ANCILLARY_DATA, address(0), 0);
+        bytes32 requestId = oracle.requestPrice(IDENTIFIER, timestamp, ANCILLARY_DATA, address(0), 0);
 
         (
             address requester,
@@ -91,8 +80,7 @@ contract TeeOracleTest is Test {
         uint256 timestamp = block.timestamp;
         oracle.requestPrice(IDENTIFIER, timestamp, ANCILLARY_DATA, address(0), 0);
 
-        bool hasPrice =
-            oracle.hasPrice(address(this), IDENTIFIER, timestamp, ANCILLARY_DATA);
+        bool hasPrice = oracle.hasPrice(address(this), IDENTIFIER, timestamp, ANCILLARY_DATA);
         assertFalse(hasPrice, "should be false before settlement");
     }
 
@@ -112,29 +100,17 @@ contract TeeOracleTest is Test {
 
     function testSettlePriceUpdatesRequest() public {
         uint256 timestamp = block.timestamp;
-        bytes32 requestId =
-            oracle.requestPrice(IDENTIFIER, timestamp, ANCILLARY_DATA, address(0), 0);
+        bytes32 requestId = oracle.requestPrice(IDENTIFIER, timestamp, ANCILLARY_DATA, address(0), 0);
 
         vm.prank(AGENT);
         oracle.settlePrice(IDENTIFIER, timestamp, ANCILLARY_DATA, 1e18, bytes32("hash"));
 
-        (
-            ,
-            ,
-            ,
-            ,
-            bool settled,
-            int256 settledPrice,
-            bytes32 storedHash
-        ) = oracle.requests(requestId);
+        (,,,, bool settled, int256 settledPrice, bytes32 storedHash) = oracle.requests(requestId);
 
         assertTrue(settled, "should be settled");
         assertEq(settledPrice, 1e18, "price");
         assertEq(storedHash, bytes32("hash"), "hash stored");
-        assertTrue(
-            oracle.hasPrice(address(this), IDENTIFIER, timestamp, ANCILLARY_DATA),
-            "has price true"
-        );
+        assertTrue(oracle.hasPrice(address(this), IDENTIFIER, timestamp, ANCILLARY_DATA), "has price true");
     }
 
     function testSettleAndGetPriceRevertsWhenUnset() public {
@@ -147,8 +123,7 @@ contract TeeOracleTest is Test {
 
     function testAdapterFlow() public {
         bytes32 questionId = adapter.initialize(ANCILLARY_DATA);
-        (bytes memory storedAncillary, uint256 requestTimestamp, bool resolved) =
-            adapter.questions(questionId);
+        (bytes memory storedAncillary, uint256 requestTimestamp, bool resolved) = adapter.questions(questionId);
 
         assertEq(storedAncillary, ANCILLARY_DATA, "ancillary stored");
         assertEq(requestTimestamp, block.timestamp, "timestamp stored");
@@ -162,7 +137,7 @@ contract TeeOracleTest is Test {
 
         int256 price = adapter.resolve(questionId);
         assertEq(price, 0, "adapter price");
-        (, , bool isResolved) = adapter.questions(questionId);
+        (,, bool isResolved) = adapter.questions(questionId);
         assertTrue(isResolved, "question resolved");
     }
 
@@ -188,5 +163,34 @@ contract TeeOracleTest is Test {
             address(mockVerifier),
             bytes("")
         );
+    }
+
+    function testForceAddKeyRequiresOwner() public {
+        vm.prank(AGENT);
+        vm.expectRevert(abi.encodeWithSelector(Ownable.OwnableUnauthorizedAccount.selector, AGENT));
+        teeRegistry.forceAddKey(agentId, bytes32("TDX"), keccak256("manual"), OTHER, "manual://dev");
+    }
+
+    function testManualResolverFlow() public {
+        vm.prank(AGENT);
+        teeRegistry.removeKey(agentId, AGENT);
+
+        uint256 timestamp = block.timestamp;
+        oracle.requestPrice(IDENTIFIER, timestamp, ANCILLARY_DATA, address(0), 0);
+
+        vm.expectRevert(TeeOracle.UnauthorizedResolver.selector);
+        vm.prank(AGENT);
+        oracle.settlePrice(IDENTIFIER, timestamp, ANCILLARY_DATA, 1e18, bytes32("hash"));
+
+        teeRegistry.forceAddKey(agentId, bytes32("TDX"), keccak256("manual"), OTHER, "manual://dev");
+
+        assertTrue(teeRegistry.isRegisteredKey(OTHER), "manual key registered");
+        assertEq(teeRegistry.keyAgent(OTHER), agentId, "manual key agent mapping");
+
+        vm.prank(OTHER);
+        oracle.settlePrice(IDENTIFIER, timestamp, ANCILLARY_DATA, 2e18, bytes32("manual"));
+
+        teeRegistry.forceRemoveKey(OTHER);
+        assertFalse(teeRegistry.isRegisteredKey(OTHER), "manual key removed");
     }
 }
