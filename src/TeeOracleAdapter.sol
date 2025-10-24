@@ -33,15 +33,12 @@ contract TeeOracleAdapter {
 
     function ready(bytes32 questionId) external view returns (bool) {
         Question storage q = questions[questionId];
-        return
-            teeOracle.hasPrice(address(this), IDENTIFIER, q.requestTimestamp, q.ancillaryData);
+        return teeOracle.hasPrice(address(this), IDENTIFIER, q.requestTimestamp, q.ancillaryData);
     }
 
     function resolve(bytes32 questionId) external returns (int256 price) {
         Question storage q = questions[questionId];
-        price = teeOracle.settleAndGetPrice(
-            IDENTIFIER, q.requestTimestamp, q.ancillaryData
-        );
+        price = teeOracle.settleAndGetPrice(IDENTIFIER, q.requestTimestamp, q.ancillaryData);
         q.resolved = true;
     }
 }
