@@ -1,11 +1,12 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.0;
 
+import "@openzeppelin/contracts/access/Ownable.sol";
 import "@openzeppelin/contracts/utils/cryptography/ECDSA.sol";
 import "../interfaces/IAutomataDcapAttestation.sol";
 import "../interfaces/ITEEVerifier.sol";
 
-contract DstackOffchainVerifier is ITEEVerifier {
+contract DstackOffchainVerifier is ITEEVerifier, Ownable {
     address public validatorPublicKey;
     address public dcapVerifier;
 
@@ -16,7 +17,8 @@ contract DstackOffchainVerifier is ITEEVerifier {
     bytes referenceRtMr2;
     bytes referenceRtMr3;
 
-    constructor(address _dcapVerifier) {
+    constructor(address _dcapVerifier) Ownable(msg.sender) {
+        require(_dcapVerifier != address(0), "Invalid DCAP verifier");
         dcapVerifier = _dcapVerifier;
     }
 
@@ -27,7 +29,14 @@ contract DstackOffchainVerifier is ITEEVerifier {
         bytes calldata _referenceRtMr1,
         bytes calldata _referenceRtMr2,
         bytes calldata _referenceRtMr3
-    ) external {
+    ) external onlyOwner {
+        _validateMeasurementLength(_referenceMrTd, "mrTd");
+        _validateMeasurementLength(_referenceMrConfigId, "mrConfigId");
+        _validateMeasurementLength(_referenceRtMr0, "rtMr0");
+        _validateMeasurementLength(_referenceRtMr1, "rtMr1");
+        _validateMeasurementLength(_referenceRtMr2, "rtMr2");
+        _validateMeasurementLength(_referenceRtMr3, "rtMr3");
+
         referenceMrTd = _referenceMrTd;
         referenceMrConfigId = _referenceMrConfigId;
         referenceRtMr0 = _referenceRtMr0;
@@ -36,7 +45,11 @@ contract DstackOffchainVerifier is ITEEVerifier {
         referenceRtMr3 = _referenceRtMr3;
     }
 
-    function initValidator(address _validatorPublicKey, bytes calldata rawQuote) external {
+    function initValidator(address _validatorPublicKey, bytes calldata rawQuote) external onlyOwner {
+        require(_validatorPublicKey != address(0), "Invalid validator key");
+        require(rawQuote.length >= 520 + 48 + 64, "Invalid quote length");
+        require(referenceMrTd.length == 48, "Reference not configured");
+
         // Verify DCAP attestation first
         (bool success,) = IAutomataDcapAttestation(dcapVerifier).verifyAndAttestOnChain(rawQuote);
         require(success, "DCAP verification failed");
@@ -83,10 +96,15 @@ contract DstackOffchainVerifier is ITEEVerifier {
     }
 
     function substring(bytes memory data, uint256 start, uint256 length) internal pure returns (bytes memory) {
+        require(start + length <= data.length, "Out of bounds");
         bytes memory result = new bytes(length);
         for (uint256 i = 0; i < length; i++) {
             result[i] = data[start + i];
         }
         return result;
+    }
+
+    function _validateMeasurementLength(bytes calldata data, string memory label) private pure {
+        require(data.length == 48, string(abi.encodePacked("Invalid ", label, " length")));
     }
 }

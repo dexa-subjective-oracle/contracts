@@ -8,6 +8,7 @@ contract TeeOracle {
     error PriceNotAvailable();
     error RequestAlreadyExists();
     error RequestNotFound();
+    error RequestAlreadySettled();
 
     struct Request {
         address requester;
@@ -19,6 +20,7 @@ contract TeeOracle {
         bool settled;
         int256 settledPrice;
         bytes32 evidenceHash;
+        address resolver;
     }
 
     event PriceRequested(bytes32 indexed requestId, address indexed requester, bytes ancillaryData);
@@ -80,12 +82,16 @@ contract TeeOracle {
         if (req.requester == address(0)) {
             revert RequestNotFound();
         }
+        if (req.settled) {
+            revert RequestAlreadySettled();
+        }
         if (!teeRegistry.isRegisteredKey(msg.sender)) {
             revert UnauthorizedResolver();
         }
         req.settled = true;
         req.settledPrice = price;
         req.evidenceHash = evidenceHash;
+        req.resolver = msg.sender;
         _removePendingRequest(requestId);
         emit PriceSettled(requestId, price, msg.sender, evidenceHash);
     }

@@ -67,6 +67,7 @@ contract TeeOracleTest is Test {
         assertFalse(req.settled, "should not be settled");
         assertEq(req.settledPrice, 0, "price default");
         assertEq(req.evidenceHash, bytes32(0), "hash default");
+        assertEq(req.resolver, address(0), "resolver default");
 
         bytes32[] memory pending = oracle.pendingRequests();
         assertEq(pending.length, 1, "pending length");
@@ -107,6 +108,7 @@ contract TeeOracleTest is Test {
         assertTrue(req.settled, "should be settled");
         assertEq(req.settledPrice, 1e18, "price");
         assertEq(req.evidenceHash, bytes32("hash"), "hash stored");
+        assertEq(req.resolver, AGENT, "resolver recorded");
         assertTrue(oracle.hasPrice(address(this), IDENTIFIER, timestamp, ANCILLARY_DATA), "has price true");
 
         bytes32[] memory pendingAfter = oracle.pendingRequests();
@@ -145,6 +147,18 @@ contract TeeOracleTest is Test {
         bytes32 questionId = adapter.initialize(ANCILLARY_DATA);
         vm.expectRevert(TeeOracle.PriceNotAvailable.selector);
         adapter.resolve(questionId);
+    }
+
+    function testSettlePriceCannotBeCalledTwice() public {
+        uint256 timestamp = block.timestamp;
+        oracle.requestPrice(IDENTIFIER, timestamp, ANCILLARY_DATA, address(0), 0);
+
+        vm.prank(AGENT);
+        oracle.settlePrice(IDENTIFIER, timestamp, ANCILLARY_DATA, 1e18, bytes32("hash"));
+
+        vm.expectRevert(TeeOracle.RequestAlreadySettled.selector);
+        vm.prank(AGENT);
+        oracle.settlePrice(IDENTIFIER, timestamp, ANCILLARY_DATA, 2e18, bytes32("hash2"));
     }
 
     function testAddKeyFailsWithInvalidProof() public {
